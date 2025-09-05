@@ -1,0 +1,240 @@
+import csv
+import sys
+import time
+from queue import PriorityQueue
+
+
+class Node:
+    """Node class
+
+    state: state
+    parent: parent node
+    action: (state, cost) for going from parent to current node
+    path_cost: total cost of path from initial node to current node
+    """
+
+    def __init__(self, state, parent=None, action=None, path_cost=0):
+        self.state = state
+        self.parent = parent
+        self.action = action
+        self.path_cost = path_cost
+
+    def __lt__(self, other):
+        return self.path_cost < other.path_cost
+
+
+class Problem:
+    """Problem class
+
+    initial: start state
+    goal: goal state
+    dd_state_graph: driving distance state graph (path cost)
+    sld_state_graph: straightline distance state graph (heuristic)
+    """
+
+    def __init__(self, initial, goal, dd_state_graph, sld_state_graph):
+        self.initial = initial
+        self.goal = goal
+        self.dd_state_graph = dd_state_graph
+        self.sld_state_graph = sld_state_graph
+
+    def is_goal(self, state):
+        """Check if goal has reached"""
+        return self.goal == state
+
+    def actions(self, state):
+        """Get actions for a state"""
+        return self.dd_state_graph[state]
+
+    def result(self, state, action):
+        """Get result of the action"""
+        return action[0]
+
+    def action_cost(self, state, action, state_prime):
+        """Get cost of the action"""
+        return action[1]
+
+
+def best_first_search(problem: Problem, f):
+    """Implementation of best-first search:
+    changing the evaluation function, the greedy
+    best-first search and A* algorithm can be
+    implemented
+    """
+    node = Node(problem.initial)
+    frontier = PriorityQueue()
+    frontier.put((f(problem, node), node))
+    reached = {problem.initial: node}
+    start_time = time.time()
+    n_expanded = 0
+
+    while not frontier.empty():
+        _, node = frontier.get()
+        if problem.is_goal(node.state):
+            end_time = time.time()
+            exec_time = end_time - start_time
+            return node, n_expanded, exec_time
+        n_expanded += 1
+
+        for child in expand(problem, node):
+            s = child.state
+            if s not in reached or child.path_cost < reached[s].path_cost:
+                reached[s] = child
+                frontier.put((f(problem, child), child))
+
+    end_time = time.time()
+    exec_time = end_time - start_time
+    return None, 0, exec_time
+
+
+def expand(problem: Problem, node: Node):
+    """Expand the node to get the child nodes"""
+    s = node.state
+    for action in problem.actions(s):
+        s_prime = problem.result(s, action)
+        cost = node.path_cost + problem.action_cost(s, action, s_prime)
+        yield Node(state=s_prime, parent=node, action=action, path_cost=cost)
+
+
+def get_dd_state_graph(file_path):
+    """Function to get the driving distance state graph from csv file"""
+    with open(file_path, newline="", encoding="utf-8") as csvfile:
+        reader = csv.reader(csvfile)
+        headers = next(reader)[1:]
+        dd_state_graph = {header: [] for header in headers}
+        for row in reader:
+            state = row[0]
+            for header, cost_str in zip(headers, row[1:]):
+                if cost_str != "-1" and state != header:
+                    cost = int(cost_str)
+                    dd_state_graph[state].append((header, cost))
+    return dd_state_graph
+
+
+def get_sld_state_graph(file_path):
+    """Function to get the straightline distance state graph from csv file"""
+    with open(file_path, newline="", encoding="utf-8") as csvfile:
+        reader = csv.reader(csvfile)
+        headers = next(reader)[1:]
+        sld_state_graph = {header: {} for header in headers}
+        for row in reader:
+            state = row[0]
+            for header, cost_str in zip(headers, row[1:]):
+                cost = int(cost_str)
+                sld_state_graph[state].update({header: cost})
+    return sld_state_graph
+
+
+def f_gbfs(problem: Problem, node: Node):
+    """
+    Evaluation function for greedy best-first search:
+    it uses the straighline distance from the node to goal node as the
+    heuristic for evaluation
+    """
+    return problem.sld_state_graph[node.state][problem.goal]
+
+
+def f_astar(problem: Problem, node: Node):
+    """
+    Evaluation function for A*:
+    it uses the sum of the path cost from the initial state to node
+    and the straighline distance from the node to goal node as the
+    heuristic for evaluation
+    """
+    return node.path_cost + problem.sld_state_graph[node.state][problem.goal]
+
+
+def get_solution_path(solution_node):
+    """Get solution path by backtracking using parents of the nodes"""
+    path = []
+    while solution_node:
+        path.append(solution_node.state)
+        solution_node = solution_node.parent
+    path.reverse()
+    return path
+
+
+def check_args(args):
+    if len(args) != 3:
+        print("ERROR: Not enough or too many input arguments.")
+        return False
+    return True
+
+
+if __name__ == "__main__":
+    args = sys.argv
+    valid_args = check_args(args)
+
+    if valid_args:
+        try:
+            dd_state_graph = get_dd_state_graph("driving.csv")
+            sld_state_graph = get_sld_state_graph("straightline.csv")
+            
+
+
+            initial = args[1].upper()
+            goal = args[2].upper()
+
+            problem = Problem(
+                initial,
+                goal,
+                dd_state_graph,
+                sld_state_graph,
+            )
+
+            # Perform the search using Greedy Best-first Search
+            print("Hujare, Ameya, A20545367 solution:")
+            print(f"Initial state: {initial}\nGoal state: {goal}\n\n")
+            gbfs_solution_node, gbfs_n_expanded, gbfs_exec_time = best_first_search(
+                problem, f_gbfs
+            )
+            astar_solution_node, astar_n_expanded, astar_exec_time = best_first_search(
+                problem, f_astar
+            )
+
+            if gbfs_solution_node:
+                # If a solution was found, reconstruct the path to the solution
+                gbfs_path = get_solution_path(gbfs_solution_node)
+                print(
+                    "Greedy Best First Search:\n"
+                    f"Solution: {gbfs_path}\n"
+                    f"Number of expanded nodes: {gbfs_n_expanded}\n"
+                    f"Number of stops on a path: {len(gbfs_path)}\n"
+                    f"Execution time: {gbfs_exec_time:.6f} seconds\n"
+                    f"Complete path cost: {gbfs_solution_node.path_cost}\n\n"
+                )
+
+            else:
+                print(
+                    "Solution: NO SOLUTION FOUND\n"
+                    "Number of stops on a path: 0\n"
+                    f"Execution time: {gbfs_exec_time:.6f} seconds\n"
+                    "Complete path cost: 0"
+                )
+
+            if astar_solution_node:
+                astar_path = get_solution_path(astar_solution_node)
+                print(
+                    "A* Search:\n"
+                    f"Solution: {astar_path}\n"
+                    f"Number of expanded nodes: {astar_n_expanded}\n"
+                    f"Number of stops on a path: {len(astar_path)}\n"
+                    f"Execution time: {astar_exec_time:.6f} seconds\n"
+                    f"Complete path cost: {astar_solution_node.path_cost}"
+                )
+
+            else:
+                print(
+                    "Solution: NO SOLUTION FOUND\n"
+                    "Number of stops on a path: 0\n"
+                    f"Execution time: {astar_exec_time:.6f} seconds\n"
+                    "Complete path cost: 0"
+                )
+        except Exception:
+            print(
+                "Solution: NO SOLUTION FOUND\n"
+                "Number of stops on a path: 0\n"
+                "Execution time: 0 seconds\n"
+                "Complete path cost: 0"
+            )
+            
