@@ -1,0 +1,85 @@
+import time
+from ctypes import util
+
+import utils
+from csp import CSP
+
+
+def select_unassigned_variable(csp, assignment):
+    # Static Variable Ordering
+    for variable in csp.variables:
+        if variable not in assignment:
+            return variable
+
+
+def order_domain_values(csp, var, assignment):
+    # domains are ordered 1-9
+    return csp.domains[var]
+
+
+def is_consistent(csp, var, value, assignment):
+    # Check if all the constraints are satisfied by variable assignment
+    for neighbour in csp.constraints[var]:
+        if neighbour in assignment and assignment[neighbour] == value:
+            return False
+    return True
+
+
+def bruteforce_search(csp):
+    # entrypoint of recursive brute force search
+    return search(csp, {})
+
+
+def search(csp, assignment):
+    # Check if the assignment is complete (all variables are assigned)
+    csp.nodes_generated += 1
+    if len(assignment) == len(csp.variables):
+        grid = utils.assignment_to_grid(assignment)
+        if utils.test_sudoku(grid):  # Check validity at the leaf node
+            return assignment  # Solution found
+        else:
+            return None  # Solution is not valid
+
+    # Select an unassigned variable
+    var = select_unassigned_variable(csp, assignment)
+
+    # Iterate over the domain values for the selected variable
+    for value in csp.domains[var]:
+        assignment[var] = value
+
+        # Recursively explore the next level
+        result = search(csp, assignment)
+
+        # If a solution is found, return it
+        if result:
+            return result
+
+        del assignment[var]
+
+    # No solution found at this level
+    return None
+
+
+def solve_sudoku_brute_force(grid):
+    variables = utils.get_variables()
+    domains = utils.get_domains(grid)
+    constraints = utils.get_constraints()
+
+    csp = CSP(variables, domains, constraints)
+    start_time = time.time()
+    solution = bruteforce_search(csp)
+    end_time = time.time()
+    search_time = end_time - start_time
+
+    if solution:
+        is_solved = True
+        grid = utils.assignment_to_grid(solution)
+    else:
+        is_solved = False
+
+    return (
+        is_solved,
+        grid,
+        csp.nodes_generated,
+        search_time,
+    )
